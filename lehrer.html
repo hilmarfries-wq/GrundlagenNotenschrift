@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lehrerbereich – Musiktest</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f5f7fb;color:#1f2937}main{width:min(1100px,94%);margin:2rem auto}.card{background:white;border:1px solid #dbe3ef;border-radius:14px;padding:1.3rem;box-shadow:0 6px 20px #0000000d;margin-bottom:1rem}input,button{padding:.75rem;border-radius:9px;font-size:1rem}input{border:1px solid #b8c3d4;width:min(420px,100%)}button{border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;margin:.2rem}.danger{background:#b91c1c}.muted{color:#64748b}.hidden{display:none}.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;min-width:700px}th,td{text-align:left;padding:.7rem;border-bottom:1px solid #e2e8f0}th{background:#f8fafc}h1{margin-top:0}
+</style></head>
+<body><main>
+<section class="card" id="loginBox"><h1>Lehrerbereich</h1><p class="muted">Melde dich mit deinem Supabase-Lehrerkonto an.</p>
+<p><input id="email" type="email" placeholder="E-Mail"></p><p><input id="password" type="password" placeholder="Passwort"></p>
+<button onclick="login()">Anmelden</button><p id="loginMsg"></p></section>
+<section class="card hidden" id="dashboard">
+<div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap"><div><h1>Ergebnisse</h1><p class="muted" id="count"></p></div><div><button onclick="exportCSV()">CSV exportieren</button><button onclick="loadResults()">Aktualisieren</button><button class="danger" onclick="logout()">Abmelden</button></div></div>
+<div class="tablewrap"><table><thead><tr><th>Name</th><th>Punkte</th><th>Prozent</th><th>Note</th><th>Datum / Uhrzeit</th></tr></thead><tbody id="rows"></tbody></table></div>
+</section></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script>
+<script>
+const sb=supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY); let results=[];
+async function login(){
+ const email=document.getElementById("email").value.trim(), password=document.getElementById("password").value;
+ const {error}=await sb.auth.signInWithPassword({email,password});
+ document.getElementById("loginMsg").textContent=error?"Anmeldung fehlgeschlagen.":"";
+ if(!error) showDashboard();
+}
+async function logout(){await sb.auth.signOut();location.reload()}
+async function showDashboard(){document.getElementById("loginBox").classList.add("hidden");document.getElementById("dashboard").classList.remove("hidden");await loadResults()}
+async function loadResults(){
+ const {data,error}=await sb.from("quiz_results").select("student_name,score,total,percentage,grade,created_at").order("created_at",{ascending:false});
+ if(error){alert("Ergebnisse konnten nicht geladen werden: "+error.message);return}
+ results=data||[]; document.getElementById("count").textContent=results.length+" gespeicherte Ergebnisse";
+ document.getElementById("rows").innerHTML=results.map(r=>`<tr><td>${esc(r.student_name)}</td><td>${r.score}/${r.total}</td><td>${r.percentage} %</td><td>${r.grade}</td><td>${new Date(r.created_at).toLocaleString("de-DE")}</td></tr>`).join("");
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
+function exportCSV(){
+ const q=v=>'"'+String(v??"").replaceAll('"','""')+'"';
+ const lines=[["Name","Punkte","Gesamt","Prozent","Note","Datum"].map(q).join(";"),...results.map(r=>[r.student_name,r.score,r.total,r.percentage,r.grade,new Date(r.created_at).toLocaleString("de-DE")].map(q).join(";"))];
+ const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"}); const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="musiktest-ergebnisse.csv";a.click();URL.revokeObjectURL(a.href);
+}
+(async()=>{const {data:{session}}=await sb.auth.getSession();if(session)showDashboard()})();
+</script></body></html>
